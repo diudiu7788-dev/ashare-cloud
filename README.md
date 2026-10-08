@@ -1,21 +1,17 @@
-# A-share Cloud Snapshot (prototype)
+# A-share multi-source cloud service v0.2
 
-Python + AKShare + FastAPI read-only JSON API. Deploy via a Docker-compatible cloud platform (Render, Railway, Fly.io, or VPS). Choose a region that can reach Eastmoney. Note: free instances may sleep and upstream sites can rate-limit or block cloud IPs.
+Replaces Eastmoney-only AKShare collection with **Tencent Finance (HTTP)** and **mootdx (TDX TCP)** fallback. Tencent is tried first; mootdx is tried if it fails. Both need actual cloud connectivity testing.
 
-## Run locally
+## Deploy to existing Render service
+Replace `main.py`, `requirements.txt`, `Dockerfile`, and `README.md` in the existing GitHub repository root, commit changes, and wait for Render automatic redeployment. Dockerfile remains unchanged.
 
-```bash
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
+## Test
+- `/health`: FastAPI is alive; **not** proof of live quote data.
+- `/v1/sources`: tries Tencent and mootdx independently and reports connection errors or sample China Petroleum quote.
+- `/v1/market`: watchlist snapshot ONLY, **not** full-market breadth or sector statistics.
+- `/v1/stock/600641`: individual quote.
+- `/v1/sectors`: HTTP 501 until a verifiable sector feed is implemented.
 
-## Endpoints
-- `GET /health`: process health only
-- `GET /v1/market`: A-share breadth and default watchlist
-- `GET /v1/sectors?limit=20`: industry leaders/laggards
-- `GET /v1/stock/600641`: single-stock snapshot
+All data has `collected_at_beijing` but **quote_freshness_verified=false**. Inspect `quote_time_raw` when available; do not assume it is fresh just because collection succeeded. Tencent quote fields are parsed from its unofficial protocol, which may change. Tencent volume is reported in hands and turnover in 10k CNY; mootdx volume units are source-specific. This is an experimental, unofficial data service, not a trading execution system. The service may not be reachable by ChatGPT's web browsing tool even if it is publicly available in a normal browser.
 
-**Important:** `collected_at_beijing` is *server fetch time*, NOT exchange quote time. AKShare Eastmoney functions do not guarantee a verified exchange timestamp. `quote_freshness_verified` remains false. Treat market data as unverified freshness until cross-checked with a timestamped exchange/provider feed. `up_9_5pct` is a rough count, NOT an accurate limit-up count across boards and ST stocks. Turnover sum is a rough cross-sectional sum, not validated exchange total. Never publish this endpoint with sensitive credentials; add auth/rate limiting before wide exposure.
-
-## Deployment
-Create a new Docker web service from this directory/repository; set `CACHE_SECONDS=120`, expose the platform-provided `PORT`, then check `/health` and `/v1/market` independently. If `/v1/market` gives 503, try another region or upstream provider. Public read-only endpoints should be rate-limited.
+Set `CACHE_SECONDS=45` on Render if desired. Public endpoints are unauthenticated: do not add account credentials, holdings, or private information.
