@@ -15,3 +15,12 @@ Replace `main.py`, `requirements.txt`, `Dockerfile`, and `README.md` in the exis
 All data has `collected_at_beijing` but **quote_freshness_verified=false**. Inspect `quote_time_raw` when available; do not assume it is fresh just because collection succeeded. Tencent quote fields are parsed from its unofficial protocol, which may change. Tencent volume is reported in hands and turnover in 10k CNY; mootdx volume units are source-specific. This is an experimental, unofficial data service, not a trading execution system. The service may not be reachable by ChatGPT's web browsing tool even if it is publicly available in a normal browser.
 
 Set `CACHE_SECONDS=45` on Render if desired. Public endpoints are unauthenticated: do not add account credentials, holdings, or private information.
+
+
+## v0.3 MCP integration
+Deploy these updated files to the same Render service. Existing REST endpoints remain.
+MCP endpoint: `https://ashare-cloud.onrender.com/mcp/` (Streamable HTTP, no authentication).
+The endpoint is read-only but publicly accessible. Only use public market data; do not add account secrets.
+After deployment, connect it from ChatGPT Plugins > Add custom MCP server > URL.
+MCP tools: get_ashare_watchlist, get_ashare_stock, get_ashare_source_status.
+Test using MCP initialize/tools/list rather than opening /mcp/ in a browser.

@@ -6,8 +6,17 @@ from zoneinfo import ZoneInfo
 
 import requests
 from fastapi import FastAPI, HTTPException, Query
+from contextlib import asynccontextmanager
+from mcp.server.fastmcp import FastMCP
 
-app = FastAPI(title='A-share Multi-source Snapshot', version='0.2')
+mcp = FastMCP('A-share Market Data', stateless_http=True, json_response=True, streamable_http_path='/')
+
+@asynccontextmanager
+async def lifespan(app):
+    async with mcp.session_manager.run():
+        yield
+
+app = FastAPI(title='A-share Multi-source Snapshot', version='0.3', lifespan=lifespan)
 TZ = ZoneInfo('Asia/Shanghai')
 TTL = int(os.getenv('CACHE_SECONDS', '45'))
 WATCH = {'600641': '先导', '600522': '中天科技', '002245': '蔚蓝锂芯', '600028': '中国石化'}
@@ -158,3 +167,24 @@ def stock(symbol: str):
 @app.get('/v1/sectors')
 def sectors(limit: int = Query(20, ge=1, le=100)):
     raise HTTPException(status_code=501, detail='sector rankings are not yet supported by verified sources; no fabricated rankings')
+
+
+@mcp.tool()
+def get_ashare_watchlist() -> dict:
+    """Read Tencent A-share quotes for the configured watchlist, including Beijing timestamps. Not full-market breadth. Verify quote freshness before treating as live."""
+    return market()
+
+
+@mcp.tool()
+def get_ashare_stock(symbol: str) -> dict:
+    """Get a quote for one 6-digit A-share stock code (e.g. 600641). Quote timestamp and source are included."""
+    return stock(symbol)
+
+
+@mcp.tool()
+def get_ashare_source_status() -> dict:
+    """Check whether Tencent and mootdx quote feeds can return data; does not establish exchange-level real-time guarantees."""
+    return sources()
+
+
+app.mount('/mcp', mcp.streamable_http_app())
