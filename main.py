@@ -16,7 +16,7 @@ async def lifespan(app):
     async with mcp.session_manager.run():
         yield
 
-app = FastAPI(title='A-share Multi-source Snapshot', version='0.3', lifespan=lifespan)
+app = FastAPI(title='A-share Multi-source Snapshot', version='0.4', lifespan=lifespan)
 TZ = ZoneInfo('Asia/Shanghai')
 TTL = int(os.getenv('CACHE_SECONDS', '45'))
 WATCH = {'600641': '先导', '600522': '中天科技', '002245': '蔚蓝锂芯', '600028': '中国石化'}
@@ -72,34 +72,9 @@ def tencent(symbols):
     return result
 
 
-def mootdx_quotes(symbols):
-    from mootdx.quotes import Quotes
-    client = Quotes.factory(market='std', multithread=False)
-    try:
-        query = [{'market': 1 if s.startswith(('6', '9')) else 0, 'code': s} for s in symbols]
-        df = client.quotes(symbol=query)
-        if df is None or df.empty:
-            raise ValueError('mootdx returned empty quotes')
-        result = {}
-        for _, row in df.iterrows():
-            code = str(row.get('code', ''))
-            if code not in symbols:
-                continue
-            result[code] = {'symbol': code, 'name': WATCH.get(code), 'price': num(row.get('price')),
-                            'previous_close': num(row.get('last_close')), 'open': num(row.get('open')),
-                            'high': num(row.get('high')), 'low': num(row.get('low')),
-                            'volume': num(row.get('vol')), 'source': 'mootdx/TDX',
-                            'quote_time_raw': None}
-        if not result:
-            raise ValueError('mootdx returned no matching symbols')
-        return result
-    finally:
-        client.close()
-
-
 def get_quotes(symbols):
     errors = {}
-    for source, fn in [('tencent', tencent), ('mootdx', mootdx_quotes)]:
+    for source, fn in [('tencent', tencent)]:
         try:
             data = fn(symbols)
             return {'source': source, 'data': data, 'errors': errors,
@@ -123,8 +98,8 @@ def cached(key, loader):
 
 @app.get('/')
 def root():
-    return {'service': 'A-share multi-source quotes', 'version': '0.2',
-            'routes': ['/health', '/v1/sources', '/v1/market', '/v1/stock/600641', '/v1/sectors']}
+    return {'service': 'A-share Tencent quotes', 'version': '0.4',
+            'routes': ['/health', '/v1/sources', '/v1/market', '/v1/stock/600641', '/v1/sectors', '/mcp/']}
 
 
 @app.get('/health')
@@ -135,7 +110,7 @@ def health():
 @app.get('/v1/sources')
 def sources():
     statuses = {}
-    for name, fn in [('tencent', tencent), ('mootdx', mootdx_quotes)]:
+    for name, fn in [('tencent', tencent)]:
         try:
             value = fn(['600028'])
             statuses[name] = {'ok': bool(value), 'sample': value.get('600028')}
@@ -183,7 +158,7 @@ def get_ashare_stock(symbol: str) -> dict:
 
 @mcp.tool()
 def get_ashare_source_status() -> dict:
-    """Check whether Tencent and mootdx quote feeds can return data; does not establish exchange-level real-time guarantees."""
+    """Check whether the Tencent quote feed can return data; does not establish exchange-level real-time guarantees."""
     return sources()
 
 
