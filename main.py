@@ -8,15 +8,26 @@ import requests
 from fastapi import FastAPI, HTTPException, Query
 from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
-mcp = FastMCP('A-share Market Data', stateless_http=True, json_response=True, streamable_http_path='/')
+# Explicitly trust the public Render hostname; do not disable DNS-rebinding protection.
+mcp = FastMCP(
+    'A-share Market Data',
+    stateless_http=True,
+    json_response=True,
+    streamable_http_path='/',
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=['ashare-cloud.onrender.com', 'ashare-cloud.onrender.com:*', 'localhost:*', '127.0.0.1:*'],
+    ),
+)
 
 @asynccontextmanager
 async def lifespan(app):
     async with mcp.session_manager.run():
         yield
 
-app = FastAPI(title='A-share Multi-source Snapshot', version='0.4', lifespan=lifespan)
+app = FastAPI(title='A-share Multi-source Snapshot', version='0.5', lifespan=lifespan)
 TZ = ZoneInfo('Asia/Shanghai')
 TTL = int(os.getenv('CACHE_SECONDS', '45'))
 WATCH = {'600641': '先导', '600522': '中天科技', '002245': '蔚蓝锂芯', '600028': '中国石化'}
@@ -98,7 +109,7 @@ def cached(key, loader):
 
 @app.get('/')
 def root():
-    return {'service': 'A-share Tencent quotes', 'version': '0.4',
+    return {'service': 'A-share Tencent quotes', 'version': '0.5',
             'routes': ['/health', '/v1/sources', '/v1/market', '/v1/stock/600641', '/v1/sectors', '/mcp/']}
 
 
